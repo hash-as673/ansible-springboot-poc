@@ -1,25 +1,43 @@
 ---
 - name: Deploy Spring Boot App via Docker
   hosts: backend_servers
-  become: yes
+  become: yes  # Runs tasks as root/sudo
   tasks:
-    - name: Install Docker
+    # 1. PREPARE THE OS FOR DOCKER
+    - name: Install yum-utils
       ansible.builtin.dnf:
-        name: docker
+        name: yum-utils
         state: present
 
-    - name: Ensure Docker is running
+    - name: Add Docker CE repository
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/centos/docker-ce.repo
+        dest: /etc/yum.repos.d/docker-ce.repo
+        mode: '0644'
+
+    - name: Install Docker CE packages
+      ansible.builtin.dnf:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+        update_cache: yes
+
+    - name: Ensure Docker is started and enabled
       ansible.builtin.systemd:
         name: docker
         state: started
         enabled: yes
 
-    - name: Create deployment folder
+    # 2. PREPARE THE APPLICATION FOLDER
+    - name: Create deployment directory
       ansible.builtin.file:
         path: /opt/rest-poc
         state: directory
+        mode: '0755'
 
-    - name: Copy Build Artifacts to RHEL
+    - name: Copy JAR and Dockerfile to RHEL
       ansible.builtin.copy:
         src: "{{ item }}"
         dest: /opt/rest-poc/
@@ -27,10 +45,14 @@
         - build/libs/rest-0.0.1-SNAPSHOT.jar
         - Dockerfile
 
+    # 3. BUILD AND RUN THE CONTAINER
     - name: Build and Restart Container
       ansible.builtin.shell: |
         cd /opt/rest-poc
+        # Stop and remove old container if it exists
         docker stop rest-app || true
         docker rm rest-app || true
+        # Build the new image (Isolated environment)
         docker build -t rest-app:latest .
+        # Run the container on port 8080
         docker run -d --name rest-app -p 8080:8080 rest-app:latest
