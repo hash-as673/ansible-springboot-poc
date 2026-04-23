@@ -1,0 +1,25 @@
+name: Dockerized Deployment
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-and-deploy:
+    runs-on: self-hosted  # This targets your WSL runner
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'oracle'
+
+      - name: Build JAR with Gradle
+        run: chmod +x gradlew && ./gradlew clean bootJar
+
+      - name: Deploy with Ansible
+        run: ansible-playbook -i inventory.ini deploy.yml

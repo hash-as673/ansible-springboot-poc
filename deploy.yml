@@ -1,0 +1,36 @@
+---
+- name: Deploy Spring Boot App via Docker
+  hosts: backend_servers
+  become: yes
+  tasks:
+    - name: Install Docker
+      ansible.builtin.dnf:
+        name: docker
+        state: present
+
+    - name: Ensure Docker is running
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Create deployment folder
+      ansible.builtin.file:
+        path: /opt/rest-poc
+        state: directory
+
+    - name: Copy Build Artifacts to RHEL
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: /opt/rest-poc/
+      loop:
+        - build/libs/rest-0.0.1-SNAPSHOT.jar
+        - Dockerfile
+
+    - name: Build and Restart Container
+      ansible.builtin.shell: |
+        cd /opt/rest-poc
+        docker stop rest-app || true
+        docker rm rest-app || true
+        docker build -t rest-app:latest .
+        docker run -d --name rest-app -p 8080:8080 rest-app:latest
